@@ -1,0 +1,46 @@
+How to compile DaVinci/openAUTOSAR
+
+The indications are for the only development environment currently supported:
+
+Ubuntu 20.04 LTS (we test the system on a VMWare virtual machine running on a MS Windows 10 host)
+
+Please note that the indications below are valid for the current "master" branch.
+For the details for different versions please refer to the README.md and INSTALL.txt
+files in the distribution.
+
+INSTALLATION
+============
+
+1. Download the package with the relevant release tag from the GitHub repository (if a zip file deflate it before progressing to next point)
+   
+2. You must have a folder with the content of the openAUTOSAR project
+     
+BUILD
+=====
+
+1. Software packages needed by openAUTOSAR 
+   - install g++ if not yet avaulable ("sudo apt install g++" should be sufficient)
+   - install CMake if not  yet available ("sudo apt install cmake" should be sufficient)
+   - install Git if not  yet available ("sudo apt install git" should be sufficient)
+   The following packages are needed for the handling of xml files (linuxOs board definition)
+   - install libxml2-dev if not yet available ("sudo apt install libxml2-dev" should be sufficient")
+   - install zlib1g-dev if not yet available ("sudo apt install zlib1g-dev" should be sufficient")
+   - install liblzma-dev if not yet available ("sudo apt install liblzma-dev" should be sufficient")
+   - install libicu-dev if not yet available ("sudo apt install libicu-dev" should be sufficient")
+2. Inside the openAUTOSAR create a "build" folder (this is the typical name of the folder where we are going to create the binaries for our package)
+3. move inside the created folder
+4. delete everything inside (of course, the first time the folder is going to be empty, but this should be done always for a clean build)
+5. run 'cmake' to create the makefiles for the system
+   the command is 
+   
+   cmake -G "Unix Makefiles" -DCMAKE_VERBOSE_MAKEFILE=true ..
+
+   -G "Unix Makefiles" : this tells CMake to generate makefiles in a Unix environment because we are using a linux host
+   -DCMAKE_VERBOSE_MAKEFILE=true : this is optional, but convenient when setting up a development environent.
+                                   Should anything go wrong with the compilation we can see the information from the compiler.
+                                   Otherwise they are hidden bx CMake
+    .. this indicates the folder where the "root" of the project is. Since we are currently in the 'build' subfolder, this indicated the parent 
+       folder
+
+6. run 'make' . This should be sufficient to call the compilation of the system
+7. if everything is configured correctly all the available modules should compile successfully.
