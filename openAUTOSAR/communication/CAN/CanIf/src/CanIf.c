@@ -421,64 +421,95 @@ const CanIf_HthConfigType* CanIf_Arc_GetTransmitHandler(CanIf_Arc_ChannelIdType 
 
 //-------------------------------------------------------------------
 
+/**
+ * [CanIf 发送接口函数]
+ *
+ * 功能：上层（PduR / CanNm / CanTp）调用此接口，请求 CanIf 发送一条
+ *       发送方向的 CAN L-PDU。这是 CanIf 作为"唯一连硬件的枢纽"的
+ *       发送侧入口，最终会下抛给 CAN 驱动（Can_Write）完成硬件发送。
+ *
+ * 返回值（Std_ReturnType）：
+ *   E_OK    —— 发送请求已被接受（或已成功交给 CAN 驱动）
+ *   E_NOT_OK —— 发送请求失败/未接受（未初始化、参数非法、PDU 无效、
+ *               控制器未启动、通道离线、CAN 驱动忙等）
+ *
+ * @param CanTxPduId   发送 L-PDU 的句柄（PduId），用于在配置表中查找对应条目
+ * @param PduInfoPtr   指向发送数据描述结构（数据指针 + 数据长度）的指针
+ * @return E_OK / E_NOT_OK
+ */
 Std_ReturnType CanIf_Transmit(PduIdType CanTxPduId,
     const PduInfoType *PduInfoPtr)
 {
-  Can_PduType canPdu;
-  const CanIf_TxPduConfigType *txEntry;
-  CanIf_ControllerModeType csMode;
-  CanIf_ChannelGetModeType pduMode;
+  Can_PduType canPdu;                       /* 组装给 CAN 驱动的 PDU 结构 */
+  const CanIf_TxPduConfigType *txEntry;     /* 查到的发送 L-PDU 配置条目 */
+  CanIf_ControllerModeType csMode;          /* 控制器模式（启动/停止/睡眠...） */
+  CanIf_ChannelGetModeType pduMode;         /* PDU 通道模式（在线/离线...） */
 
   VALIDATE(CanIf_Global.initRun, CANIF_TRANSMIT_ID, CANIF_E_UNINIT );
   VALIDATE((PduInfoPtr != 0), CANIF_TRANSMIT_ID, CANIF_E_PARAM_POINTER );
 
-  // Get the controller from L-PDU handle
+  /* ============ ② 根据句柄查找发送 PDU 配置条目 ============ */
+  /* 通过 CanTxPduId 在发送配置表中找到对应的 TxPdu 配置 */
   txEntry = CanIf_FindTxPduEntry(CanTxPduId);
 
+   /* 找不到对应条目 → 该发送 PDU 句柄无效 */
   if (txEntry == 0)
   {
     VALIDATE(FALSE, CANIF_TRANSMIT_ID, CANIF_E_INVALID_TXPDUID);
     return E_NOT_OK;
   }
 
+  /* 从配置条目中取该 L-PDU 所属的通道 ID（控制器 ID） */
+  /* （CanIfCanTxPduHthRef 是硬件发送句柄引用，再取其中的控制器 ID） */
   CanIf_Arc_ChannelIdType channel = txEntry->CanIfCanTxPduHthRef->CanIfCanControllerIdRef;
 
-  // Get and verify the controller mode
+  /* ============ ③ 获取并校验控制器模式 ============ */
+  /* 查询该通道对应 CAN 控制器的当前模式 */
   if (CanIf_GetControllerMode(channel, &csMode) == E_NOT_OK){
     return E_NOT_OK;
   }
 
+  /* 只有控制器处于 STARTED（已启动）状态才允许发送 */
+  /* （对应需求：CANIF_161） */
   if (csMode != CANIF_CS_STARTED){  // CANIF_161
     return E_NOT_OK;
   }
 
-  // Get and verify the PDU channel mode control
+  /* ============ ④ 获取并校验 PDU 通道模式控制 ============ */
+  /* 查询该通道的 PDU 模式（在线/离线控制，由 CanSM 等控制） */
   if (CanIf_GetPduMode(channel, &pduMode) == E_NOT_OK){
     return E_NOT_OK;
   }
 
+  /* 只有通道处于"发送在线"或"完全在线"状态才允许发送 */
   if ((pduMode != CANIF_GET_TX_ONLINE) && (pduMode != CANIF_GET_ONLINE)){
     return E_NOT_OK;
   }
 
-  canPdu.id = txEntry->CanIfCanTxPduIdCanId;
+  /* ============ ⑤ 组装 CAN 驱动需要的 PDU 结构 ============ */
+  canPdu.id = txEntry->CanIfCanTxPduIdCanId;          /* CAN ID（标准 11 位或扩展 29 位） */
+  canPdu.length = PduInfoPtr->SduLength;              /* 数据长度（字节） */
+  canPdu.sdu = PduInfoPtr->SduDataPtr;                /* 指向实际发送数据的指针 */
+  canPdu.swPduHandle = CanTxPduId;                    /* 软件 PDU 句柄（用于发送确认时回传） */
 
-  canPdu.length = PduInfoPtr->SduLength;
-  canPdu.sdu = PduInfoPtr->SduDataPtr;
-  canPdu.swPduHandle = CanTxPduId;
-
+  /* ============ ⑥ 下抛给 CAN 驱动发送 ============ */
+  /* 通过 HTH 硬件发送句柄调用 CAN 驱动的 Can_Write */
   Can_ReturnType rVal = Can_Write(txEntry->CanIfCanTxPduHthRef->CanIfHthIdSymRef, &canPdu);
 
+   /* CAN 驱动返回：NOT_OK → 发送失败 */
   if (rVal == CAN_NOT_OK){
     return E_NOT_OK;
   }
 
+  /* CAN 驱动返回：BUSY（忙）→ 不支持 Tx 缓冲，直接返回失败 */
+  /* （对应需求：CANIF 082、CANIF 161） */
   if (rVal == CAN_BUSY)  // CANIF 082, CANIF 161
   {
     // Tx buffering not supported so just return.
     return E_NOT_OK;
   }
 
+  /* CAN 驱动返回 OK → 发送请求已被 CAN 驱动接收 */
   return E_OK;
 }
 

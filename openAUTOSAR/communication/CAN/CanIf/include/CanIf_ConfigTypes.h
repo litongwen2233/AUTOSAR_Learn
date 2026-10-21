@@ -157,52 +157,83 @@ typedef struct {
  * CanIfTxPduConfig container
  */
 
-/** Definition of Tx PDU (Protocol Data Unit). */
+/** Definition of Tx PDU (Protocol Data Unit).
+ * 定义发送 PDU（协议数据单元）的类型。
+ * 这个结构体描述了一条"发送方向的 CAN L-PDU"的完整配置。
+ * 结构体是 CanIf 的 Tx 方向静态配置表
+ */
 typedef struct {
-	/** ECU wide unique, symbolic handle for transmit CAN L-PDU. The
-	 *  CanIfCanTxPduId is configurable at pre-compile and post-built time.
-	 *  Range: 0..max. number of CantTxPduIds  	PduIdType 	CanTxPduId; */
+	/**
+	 * [发送 L-PDU 的唯一句柄]
+	 * 在整个 ECU 范围内唯一的、符号化的发送 CAN L-PDU 句柄。
+	 * 该 CanIfTxPduId 可在预编译和 post-build（后编译）时配置。
+	 * 取值范围：0 .. 最大 CanTxPduId 数量
+	 * 类型：PduIdType
+	 */
 	PduIdType CanIfTxPduId;
 
-	/** CAN Identifier of transmit CAN L-PDUs used by the CAN Driver for CAN L-
-	 *  PDU transmission. Range: 11 Bit For Standard CAN Identifier ... 29 Bit For
-	 *  Extended CAN identifier */
+	/**
+	 * [发送 L-PDU 的 CAN 标识符（CAN ID）]
+	 * CAN 驱动在发送这条 CAN L-PDU 时使用的 CAN 标识符。
+	 * 范围：标准帧为 11 位（标准 CAN 标识符）... 扩展帧为 29 位（扩展 CAN 标识符）
+	 */
 	uint32  CanIfCanTxPduIdCanId;
 
-	/** Data length code (in bytes) of transmit CAN L-PDUs used by the CAN
-	 *  Driver for CAN L-PDU transmission. The data area size of a CAN L-Pdu
-	 *  can have a range from 0 to 8 bytes. */
+	/**
+	 * [数据长度码 DLC]
+	 * 发送 CAN L-PDU 的数据长度（字节数），CAN 驱动发送时使用。
+	 * 一条 CAN L-PDU 的数据区大小范围是 0 到 8 字节。
+	 */
 	uint8 		CanIfCanTxPduIdDlc;
 
-	/** Defines the type of each transmit CAN L-PDU.
-	 *  DYNAMIC  CAN ID is defined at runtime.
-	 *  STATIC  CAN ID is defined at compile-time. */
+	/**
+	 * [发送 L-PDU 的类型]
+	 * 定义每条发送 CAN L-PDU 的 CAN ID 类型：
+	 *   DYNAMIC  —— CAN ID 在运行时（动态）确定
+	 *   STATIC   —— CAN ID 在编译时（静态）确定
+	 */
 	CanIf_PduTypeType		CanIfCanTxPduType;
 
 #if ( CANIF_READTXPDU_NOTIFY_STATUS_API == STD_ON )
-	/** Enables and disables transmit confirmation for each transmit CAN L-PDU
-	 *  for reading its notification status. True: Enabled False: Disabled */
+	/**
+	 * [发送确认状态读取使能]
+	 * 为每条发送 CAN L-PDU 使能/禁止其"发送确认状态"的读取功能。
+	 * True  = 使能；False = 禁止。
+	 * （受编译开关 CANIF_READTXPDU_NOTIFY_STATUS_API 控制，未开启时不编译此字段）
+	 */
 	boolean		CanIfReadTxPduNotifyStatus;
 #endif
 
-	/** CAN Identifier of transmit CAN L-PDUs used by the CAN Driver for CAN L-
-	 *  PDU transmission.
-	 *  EXTENDED_CAN  The CANID is of type Extended (29 bits).
-	 *  STANDARD_CAN  The CANID is of type Standard (11 bits). */
+	/**
+	 * [CAN ID 标识符类型]
+	 * 发送 CAN L-PDU 使用的 CAN ID 类型（CAN 驱动使用）：
+	 *   EXTENDED_CAN —— 29 位扩展帧
+	 *   STANDARD_CAN —— 11 位标准帧
+	 */
 	CanIf_CanIdTypeType		CanIfTxPduIdCanIdType;
 
-	/** Name of target confirmation services to target upper layers (PduR, CanNm
-	 *  and CanTp. If parameter is not configured then no call-out function is
-	 *  provided by the upper layer for this Tx L-PDU. */
+	/**
+	 * [目标上层确认回调函数指针]
+	 * 指向"目标上层"（PduR、CanNm、CanTp）的发送确认服务名称。
+	 * 若未配置，则上层对该发送 L-PDU 不提供任何回调函数。
+	 * 这对应 AUTOSAR 需求：CANIF 109
+	 */
 	void (*CanIfUserTxConfirmation)(PduIdType);   /* CANIF 109 */
 
-	/** Handle, that defines the hardware object or the pool of hardware objects
-	 *  configured for transmission. The parameter refers HTH Id, to which the L-
-	 *  PDU belongs to. */
+	/**
+	 * [硬件发送句柄引用]
+	 * 定义用于发送的硬件对象或硬件对象池。
+	 * 该参数引用 HTH（Hardware Transmit Handle，硬件发送句柄）的 Id，
+	 * 即该 L-PDU 所属的 HTH Id。
+	 */
 	const CanIf_HthConfigType *CanIfCanTxPduHthRef;
 
-	/** Reference to the "global" Pdu structure to allow harmonization of handle
-	 *  IDs in the COM-Stack. */
+	/**
+	 * [全局 PDU 结构引用]
+	 * 指向"全局" Pdu 结构的引用，用于在 COM-Stack 中统一句柄 ID。
+	 * （也就是指向 Com 配置中的对应 PDU 描述，保证 CanIf 与上层 Com/PduR
+	 *   之间用同一套句柄互相映射）
+	 */
 	void *PduIdRef;
 } CanIf_TxPduConfigType;
 
